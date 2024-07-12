@@ -1,0 +1,51 @@
+<table style="padding: 20px;" align="center"><tr><td>
+  <b>Search Data Extension in [Business Unit/Market Name]</b><br><br>
+  <form action="%%=RequestParameter('PAGEURL')=%%" method="post">
+    <select name="DEprop">
+     <option value="Name">Name or Keyword</option>      
+     <option value="CustomerKey">External Key</option>
+    </select>
+     contains
+    <input type="text" name="DEval" value="" maxlength="128"><br>
+    <input type="submit" value="Submit">
+  </form>
+    <br><b>Folder paths of matching Data Extensions: </b><br><br>
+    <script runat="server">
+Platform.Load("core","1.1.5");
+
+var DEprop = Request.GetQueryStringParameter("DEprop");
+var DEval = Request.GetQueryStringParameter("DEval");
+
+if (DEprop && DEval) {
+    var keywordSearch = "%" + DEval + "%";
+    var FindDEs = DataExtension.Retrieve({Property:DEprop, SimpleOperator:"like", Value:keywordSearch});
+
+    if (FindDEs && FindDEs.length > 0) {
+        Write('<ul>');
+        for(var i=0; i < FindDEs.length; i++) {
+            var list = [];
+            list.push(FindDEs[i].Name);
+            var FolderID = FindDEs[i].CategoryID;
+
+            var path = function(id) {
+                if (id > 0) {
+                    var results = Folder.Retrieve({Property:"ID",SimpleOperator:"equals",Value:id});
+                    list.unshift(results[0].Name);
+                    return path(results[0].ParentFolder.ID);
+                } else {
+                    return id;
+                }
+            };
+            path(FolderID);
+
+            var lastValue = list.pop();
+            Write('<li>' + list.join("> ") + (list.length > 0 ? " > " : "") + "<strong>" + lastValue + "</strong></li>");
+        }
+        Write('</ul>');
+    } else {
+        Write("No Data Extension found.");
+    }
+}
+</script>
+  </td></tr>
+  </table>

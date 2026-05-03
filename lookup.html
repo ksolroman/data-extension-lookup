@@ -1,51 +1,430 @@
-<table style="padding: 20px;" align="center"><tr><td>
-  <b>Search Data Extension in [Business Unit/Market Name]</b><br><br>
-  <form action="%%=RequestParameter('PAGEURL')=%%" method="post">
-    <select name="DEprop">
-     <option value="Name">Name or Keyword</option>      
-     <option value="CustomerKey">External Key</option>
-    </select>
-     contains
-    <input type="text" name="DEval" value="" maxlength="128"><br>
-    <input type="submit" value="Submit">
-  </form>
-    <br><b>Folder paths of matching Data Extensions: </b><br><br>
-    <script runat="server">
-Platform.Load("core","1.1.5");
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <style class="main_style">
+    *, *::before, *::after { box-sizing: border-box; }
 
-var DEprop = Request.GetQueryStringParameter("DEprop");
-var DEval = Request.GetQueryStringParameter("DEval");
-
-if (DEprop && DEval) {
-    var keywordSearch = "%" + DEval + "%";
-    var FindDEs = DataExtension.Retrieve({Property:DEprop, SimpleOperator:"like", Value:keywordSearch});
-
-    if (FindDEs && FindDEs.length > 0) {
-        Write('<ul>');
-        for(var i=0; i < FindDEs.length; i++) {
-            var list = [];
-            list.push(FindDEs[i].Name);
-            var FolderID = FindDEs[i].CategoryID;
-
-            var path = function(id) {
-                if (id > 0) {
-                    var results = Folder.Retrieve({Property:"ID",SimpleOperator:"equals",Value:id});
-                    list.unshift(results[0].Name);
-                    return path(results[0].ParentFolder.ID);
-                } else {
-                    return id;
-                }
-            };
-            path(FolderID);
-
-            var lastValue = list.pop();
-            Write('<li>' + list.join("> ") + (list.length > 0 ? " > " : "") + "<strong>" + lastValue + "</strong></li>");
-        }
-        Write('</ul>');
-    } else {
-        Write("No Data Extension found.");
+    body {
+      color: #1e293b;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 15px;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%);
+      min-height: 100vh;
     }
-}
+
+    .layout-canvas-g {
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 4px 24px rgba(99,102,241,0.10), 0 1px 4px rgba(0,0,0,0.06);
+      margin: 32px auto;
+      padding: 36px 40px;
+      width: 92%;
+      max-width: 960px;
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid #f1f5f9;
+    }
+
+    .app-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .app-title h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1e293b;
+      line-height: 1.2;
+    }
+
+    .app-title p {
+      margin: 2px 0 0;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+
+    /* Search form */
+    .search-form {
+      background: #f8faff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .form-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .form-group { flex: 1; min-width: 160px; }
+
+    select, input[type="text"] {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1.5px solid #e2e8f0;
+      width: 100%;
+      font-size: 14px;
+      font-family: inherit;
+      color: #1e293b;
+      background: white;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+
+    .form-connector {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      font-weight: 500;
+      padding-top: 22px;
+      flex-shrink: 0;
+    }
+
+    .btn-search {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      margin-top: 22px;
+      flex-shrink: 0;
+      transition: opacity 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .btn-search:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-search:active { transform: translateY(0); }
+
+    /* Loading */
+    .loading-state {
+      display: none;
+      text-align: center;
+      padding: 40px 20px;
+      color: #6366f1;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e0e7ff;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    .results-area { display: none; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .results-count {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #6366f1;
+      background: #eef2ff;
+      padding: 5px 12px;
+      border-radius: 20px;
+    }
+
+    .btn-export {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1.5px solid #e2e8f0;
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-export:hover { background: #e2e8f0; }
+
+    /* Table */
+    .results-table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+
+    table.results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    .results-table thead tr {
+      background: #f8faff;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .results-table th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 0.73rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+
+    .results-table tbody tr {
+      border-bottom: 1px solid #f1f5f9;
+      transition: background 0.15s;
+    }
+
+    .results-table tbody tr:last-child { border-bottom: none; }
+    .results-table tbody tr:hover { background: #f8faff; }
+
+    .results-table td {
+      padding: 11px 14px;
+      color: #334155;
+      vertical-align: top;
+    }
+
+    .de-name { font-weight: 600; color: #1e293b; }
+    .de-name mark {
+      background: #fef08a;
+      color: #1e293b;
+      border-radius: 3px;
+      padding: 0 2px;
+    }
+
+    .de-path {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+
+    .de-path .path-segment { color: #94a3b8; }
+    .de-path .path-final { color: #6366f1; font-weight: 600; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .badge-yes { background: #dcfce7; color: #16a34a; }
+    .badge-no  { background: #f1f5f9; color: #94a3b8; }
+
+    .key-text {
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      color: #7c3aed;
+      background: #f5f3ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Empty / error states */
+    .empty-state, .error-state {
+      text-align: center;
+      padding: 48px 20px;
+    }
+
+    .state-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state p { color: #94a3b8; font-size: 0.9rem; }
+    .error-state p { color: #ef4444; font-size: 0.9rem; }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .page-info { font-size: 0.82rem; color: #64748b; }
+
+    .btn-page {
+      background: white;
+      border: 1.5px solid #e2e8f0;
+      color: #475569;
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .btn-page:hover:not(:disabled) { border-color: #6366f1; color: #6366f1; }
+    .btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    @media (max-width: 600px) {
+      .layout-canvas-g { padding: 20px 16px; margin: 16px auto; width: 96%; }
+      .form-row { flex-direction: column; }
+      .form-connector { padding-top: 0; }
+      .btn-search { margin-top: 0; width: 100%; justify-content: center; }
+    }
+  </style>
+  <title>Enterprise DE Lookup</title>
+</head>
+<body>
+<div class="layout layout-canvas-g">
+
+  <div class="app-header">
+    <div class="app-icon">&#128269;</div>
+    <div class="app-title">
+      <h1>Enterprise DE Lookup</h1>
+      <p>Search and explore Data Extensions across your Business Unit</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="columns col1">
+      <div data-type="slot" data-key="col1"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Show loading state on form submit
+  document.addEventListener('DOMContentLoaded', function() {
+    var form = document.querySelector('form');
+    if (form) {
+      form.addEventListener('submit', function() {
+        var loading = document.getElementById('loading-state');
+        var results = document.getElementById('results-area');
+        if (loading) loading.style.display = 'block';
+        if (results) results.style.display = 'none';
+      });
+    }
+
+    // Show results area if results exist
+    var resultRows = document.querySelectorAll('.result-row');
+    var resultsArea = document.getElementById('results-area');
+    var emptyState = document.getElementById('empty-state');
+    var errorState = document.getElementById('error-state');
+
+    if (resultsArea) {
+      if (resultRows.length > 0 || emptyState || errorState) {
+        resultsArea.style.display = 'block';
+      }
+    }
+
+    // CSV Export
+    var exportBtn = document.getElementById('btn-export');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function() {
+        var rows = document.querySelectorAll('.result-row');
+        if (!rows.length) return;
+
+        var csv = ['Name,External Key,Folder Path,Sendable,Testable'];
+        rows.forEach(function(row) {
+          var name    = (row.dataset.name    || '').replace(/"/g, '""');
+          var key     = (row.dataset.key     || '').replace(/"/g, '""');
+          var path    = (row.dataset.path    || '').replace(/"/g, '""');
+          var send    = row.dataset.sendable || 'No';
+          var test    = row.dataset.testable || 'No';
+          csv.push('"' + name + '","' + key + '","' + path + '","' + send + '","' + test + '"');
+        });
+
+        var blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href = url;
+        a.download = 'de-lookup-results.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    // Pagination
+    var pageSize = 25;
+    var currentPage = 1;
+    var allRows = Array.from(document.querySelectorAll('.result-row'));
+    var totalPages = Math.ceil(allRows.length / pageSize);
+
+    function showPage(page) {
+      currentPage = page;
+      allRows.forEach(function(row, i) {
+        var start = (page - 1) * pageSize;
+        row.style.display = (i >= start && i < start + pageSize) ? '' : 'none';
+      });
+      var pageInfo = document.getElementById('page-info');
+      var btnPrev  = document.getElementById('btn-prev');
+      var btnNext  = document.getElementById('btn-next');
+      if (pageInfo) pageInfo.textContent = 'Page ' + page + ' of ' + totalPages;
+      if (btnPrev)  btnPrev.disabled  = page <= 1;
+      if (btnNext)  btnNext.disabled  = page >= totalPages;
+    }
+
+    if (allRows.length > pageSize) {
+      showPage(1);
+      var pag = document.getElementById('pagination');
+      if (pag) pag.style.display = 'flex';
+    }
+
+    var btnPrev = document.getElementById('btn-prev');
+    var btnNext = document.getElementById('btn-next');
+    if (btnPrev) btnPrev.addEventListener('click', function() { if (currentPage > 1) showPage(currentPage - 1); });
+    if (btnNext) btnNext.addEventListener('click', function() { if (currentPage < totalPages) showPage(currentPage + 1); });
+  });
 </script>
-  </td></tr>
-  </table>
+</body>
+</html>
